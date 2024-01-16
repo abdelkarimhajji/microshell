@@ -19,13 +19,32 @@ int cd(char **av, int i)
         return err("error: cd : bad argumens\n");
     else if(chdir(av[1]) == -1)
         return err ("error: cd: cannot change directory to"), err(av[1]), err(("\n"));
+    return 0;
 }
 
 int exec(char **av, char **env, int i)
 {
     int fd[2];
     int status;
-    int haspipe 
+    int haspipe = av[i] && !strcmp(av[i], "|");
+
+    if(haspipe && pipe(fd) == -1)
+        return err("error :fatal\n");
+
+    int pid = fork();
+    if(!pid)
+    {
+        av[i] = 0;
+        if(haspipe && (dup2(fd[1], 1) == -1 || close(fd[0]) == -1 || close(fd[1]) == -1))
+            return err("error: fatal\n");
+        execve(*av, av, env);
+        return err("error: cannot execute "), err(*av), err("\n");
+    }
+
+    waitpid(pid, &status, 0);
+    if(haspipe && (dup2(fd[0], 0) == -1 || close(fd[0]) == -1 || close(fd[1]) == -1))
+        return err("error fatal\n");
+    return WIFEXITED(status) && WEXITSTATUS(status); 
 }
 
 int main(int ac, char **av, char **env)
